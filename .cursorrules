@@ -1,0 +1,15 @@
+rely on these docs for guidance: 
+- https://developer.chrome.com/docs/extensions/reference/
+
+
+Remember to use SOLID principles.
+ - Single Responsibility Principle (SRP)
+ - Open/Closed Principle (OCP)
+ - Liskov Substitution Principle (LSP)
+ - Interface Segregation Principle (ISP)
+ - Dependency Inversion Principle (DIP)
+
+
+keep commented code when making updates
+do not remove any code that is already working including comments, permissions, etc.
+

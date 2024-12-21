@@ -16,15 +16,15 @@
     "48": "icon48.png"
   },
   "permissions": [
+    "downloads",
+    "downloads.shelf",
     "tabs",
     "activeTab",
     "scripting",
-    "storage",
-    "downloads",
-    "downloads.shelf"
+    "storage"
   ],
   "host_permissions": [
-    "https://*.youtube.com/*"
+    "*://*.youtube.com/*"
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"

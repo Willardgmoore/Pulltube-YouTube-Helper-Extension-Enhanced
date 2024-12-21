@@ -70,90 +70,238 @@ async function checkPermission() {
 	});
 }
 
-// File handling module
-const FileHandler = {
-	createBlob: (content) => {
-		return new Blob([content], { type: 'text/plain;charset=utf-8' });
-	},
+// Interfaces
+/**
+ * @interface ILogger
+ * log(message: string, ...args: any[]): void
+ */
 
-	generateFilename: () => {
+/**
+ * @interface IContentCreator
+ * create(data: any[]): string
+ */
+
+/**
+ * @interface IFileDownloader
+ * download(content: string, filename: string): Promise<number>
+ */
+
+/**
+ * @interface IDownloadMonitor
+ * waitForCompletion(downloadId: number): Promise<boolean>
+ */
+
+// Logger Implementation
+const Logger = {
+	log: (message, ...args) => {
+		if (DEBUG) console.log('🎵', message, ...args);
+	}
+};
+
+// Content Creator Implementation
+class URLContentCreator {
+	create(urls) {
+		Logger.log('Creating content from URLs:', urls.length);
+		return urls
+			.map(url => url.trim())
+			.filter(url => url)
+			.join('\n');
+	}
+}
+
+// File Name Generator Implementation
+class TimestampFileNamer {
+	generate() {
 		const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 		return `pulltube-urls-${timestamp}.txt`;
-	},
+	}
+}
 
-	createDownload: async (blob, filename) => {
+// Blob Creator Implementation
+class TextBlobCreator {
+	create(content) {
+		return new Blob([content], { 
+			type: 'text/plain;charset=utf-8' 
+		});
+	}
+}
+
+// Chrome Download Implementation
+class ChromeDownloader {
+	constructor(blobCreator) {
+		this.blobCreator = blobCreator;
+	}
+
+	async download(content, filename) {
+		Logger.log('Starting file download:', { filename, contentLength: content.length });
+		
+		const blob = this.blobCreator.create(content);
 		const blobUrl = URL.createObjectURL(blob);
+		
 		try {
-			const downloadId = await new Promise((resolve, reject) => {
-				chrome.downloads.download({
-					url: blobUrl,
-					filename: filename,
-					saveAs: true,
-					conflictAction: 'uniquify'
-				}, (downloadId) => {
-					if (chrome.runtime.lastError) {
-						reject(chrome.runtime.lastError);
-					} else {
-						resolve(downloadId);
-					}
-				});
-			});
-			return downloadId;
+			return await this._initiateDownload(blobUrl, filename);
 		} finally {
 			URL.revokeObjectURL(blobUrl);
 		}
 	}
-};
 
-// Download monitoring module
-const DownloadMonitor = {
-	watchDownload: (downloadId) => {
+	_initiateDownload(blobUrl, filename) {
 		return new Promise((resolve, reject) => {
-			const listener = (delta) => {
-				if (delta.id === downloadId) {
-					if (delta.state?.current === 'complete') {
-						chrome.downloads.onChanged.removeListener(listener);
-						resolve(true);
-					} else if (delta.error) {
-						chrome.downloads.onChanged.removeListener(listener);
-						reject(new Error(`Download failed: ${delta.error.current}`));
-					}
-				}
+			const options = {
+				url: blobUrl,
+				filename,
+				saveAs: true,
+				conflictAction: 'uniquify'
 			};
+			
+			// Add error handling for downloads API
+			if (!chrome.downloads) {
+				reject(new Error('Downloads API not available'));
+				return;
+			}
+
+			chrome.downloads.download(options, (downloadId) => {
+				if (chrome.runtime.lastError) {
+					Logger.log('Download error:', chrome.runtime.lastError);
+					reject(chrome.runtime.lastError);
+				} else if (downloadId === undefined) {
+					Logger.log('Download failed: No download ID returned');
+					reject(new Error('Download failed to start'));
+				} else {
+					Logger.log('Download initiated:', downloadId);
+					resolve(downloadId);
+				}
+			});
+		});
+	}
+}
+
+// Download Monitor Implementation
+class ChromeDownloadMonitor {
+	async waitForCompletion(downloadId) {
+		Logger.log('Monitoring download:', downloadId);
+		return new Promise((resolve, reject) => {
+			const listener = this._createListener(downloadId, resolve, reject);
 			chrome.downloads.onChanged.addListener(listener);
 		});
 	}
+
+	_createListener(downloadId, resolve, reject) {
+		return (delta) => {
+			if (delta.id === downloadId) {
+				if (delta.state?.current === 'complete') {
+					chrome.downloads.onChanged.removeListener(listener);
+					Logger.log('Download completed successfully');
+					resolve(true);
+				} else if (delta.error) {
+					chrome.downloads.onChanged.removeListener(listener);
+					Logger.log('Download failed:', delta.error.current);
+					reject(new Error(`Download failed: ${delta.error.current}`));
+				}
+			}
+		};
+	}
+}
+
+// File Saver Service
+class FileSaverService {
+	constructor(
+		contentCreator = new URLContentCreator(),
+		fileNamer = new TimestampFileNamer(),
+		downloader = new ChromeDownloader(new TextBlobCreator()),
+		monitor = new ChromeDownloadMonitor()
+	) {
+		this.contentCreator = contentCreator;
+		this.fileNamer = fileNamer;
+		this.downloader = downloader;
+		this.monitor = monitor;
+	}
+
+	async save(urls) {
+		if (!urls?.length) {
+			Logger.log('No URLs provided to save');
+			return false;
+		}
+
+		try {
+			// Create content first to validate we have data
+			const content = this.contentCreator.create(urls);
+			if (!content) {
+				Logger.log('No content generated from URLs');
+				return false;
+			}
+
+			const filename = this.fileNamer.generate();
+			
+			// Attempt download with retries
+			let attempts = 0;
+			const maxAttempts = 3;
+			
+			while (attempts < maxAttempts) {
+				try {
+					const downloadId = await this.downloader.download(content, filename);
+					await this.monitor.waitForCompletion(downloadId);
+					Logger.log('File saved successfully');
+					return true;
+				} catch (error) {
+					attempts++;
+					Logger.log(`Download attempt ${attempts} failed:`, error);
+					if (attempts === maxAttempts) throw error;
+					await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retry
+				}
+			}
+		} catch (error) {
+			Logger.log('Error saving URLs to file:', error);
+			throw error;
+		}
+	}
+}
+
+// Factory
+const FileSaverFactory = {
+	create: () => new FileSaverService()
 };
 
-// Main file saving function
+// Public API
 async function saveUrlsToFile(urls) {
-	log('Starting saveUrlsToFile with', urls.length, 'URLs');
-	
-	try {
-		// Create content
-		const content = urls.join('\n');
-		log('Content prepared:', { urlCount: urls.length });
+	const fileSaver = FileSaverFactory.create();
+	return fileSaver.save(urls);
+}
+
+// URL Processor Service
+class URLProcessorService {
+	constructor(fileSaver = FileSaverFactory.create()) {
+		this.fileSaver = fileSaver;
+	}
+
+	async process(urlString) {
+		Logger.log('Processing URLs:', urlString);
 		
-		// Generate filename
-		const filename = FileHandler.generateFilename();
-		log('Generated filename:', filename);
+		const urls = this._parseUrls(urlString);
+		Logger.log(`Processing ${urls.length} URLs`);
 		
-		// Create blob
-		const blob = FileHandler.createBlob(content);
-		log('Blob created');
-		
-		// Initiate download
-		const downloadId = await FileHandler.createDownload(blob, filename);
-		log('Download initiated:', downloadId);
-		
-		// Monitor download
-		await DownloadMonitor.watchDownload(downloadId);
-		log('Download completed successfully');
-		
-		return true;
-	} catch (error) {
-		log('Error in saveUrlsToFile:', error);
-		throw error;
+		try {
+			await this.fileSaver.save(urls);
+			Logger.log('URLs saved to file successfully');
+			return urls;
+		} catch (error) {
+			Logger.log('Failed to save URLs to file:', error);
+			return urls; // Continue even if save fails
+		}
+	}
+
+	_parseUrls(urlString) {
+		return urlString.split('\n')
+			.map(url => {
+				try {
+					const urlObj = new URL(url);
+					return `https://www.youtube.com/watch?v=${urlObj.searchParams.get('v')}`;
+				} catch (e) {
+					Logger.log('Error cleaning URL:', e);
+					return url;
+				}
+			})
+			.filter(url => url);
 	}
 }
 
