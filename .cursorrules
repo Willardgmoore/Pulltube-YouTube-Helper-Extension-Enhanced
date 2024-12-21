@@ -1,15 +1,94 @@
 rely on these docs for guidance: 
 - https://developer.chrome.com/docs/extensions/reference/
 
+# Chrome Extension Best Practices
+- Follow Chrome's Manifest V3 guidelines
+- Use service workers instead of background pages
+- Implement proper permission handling and security measures
+- Follow Chrome's messaging patterns for component communication
+- Use content scripts judiciously and only when needed
+- Implement proper error boundaries and logging
+- Handle YouTube's dynamic content loading gracefully
 
-Remember to use SOLID principles.
- - Single Responsibility Principle (SRP)
- - Open/Closed Principle (OCP)
- - Liskov Substitution Principle (LSP)
- - Interface Segregation Principle (ISP)
- - Dependency Inversion Principle (DIP)
+# Code Organization
+- Keep service worker (background.js) lightweight
+- Separate concerns between background, content, and popup scripts
+- Use TypeScript interfaces for better type safety
+- Implement proper message passing between components
+- Follow Chrome's recommended security policies
+- Use proper versioning in manifest.json
 
+# Performance Guidelines
+- Minimize content script injections
+- Use event-driven architecture
+- Implement proper cleanup in content scripts
+- Cache results when appropriate
+- Use chrome.storage efficiently
+- Implement proper tab management
+- Handle YouTube's SPA architecture properly
 
-keep commented code when making updates
-do not remove any code that is already working including comments, permissions, etc.
+# SOLID Principles
+- Single Responsibility Principle (SRP)
+  * Each class handles one responsibility
+  * Separate URL extraction from download management
+  * Keep message handling isolated
+
+- Open/Closed Principle (OCP)
+  * Use interfaces for extensibility
+  * Allow for new YouTube selectors without modifying existing code
+  * Make logging system pluggable
+
+- Liskov Substitution Principle (LSP)
+  * Ensure all implementations follow their interfaces
+  * Maintain consistent behavior across different YouTube layouts
+  * Keep download handlers interchangeable
+
+- Interface Segregation Principle (ISP)
+  * Keep interfaces focused and minimal
+  * Separate logging from business logic
+  * Split message handling into specific concerns
+
+- Dependency Inversion Principle (DIP)
+  * Depend on abstractions
+  * Use dependency injection
+  * Keep components loosely coupled
+
+# Maintenance Rules
+- keep commented code when making updates
+- do not remove any code that is already working including comments, permissions, etc.
+- maintain proper error logging
+- document any YouTube DOM structure changes
+- keep manifest.json permissions minimal but functional
+- maintain compatibility with Pulltube protocol
+- maintain errors.log for Cursor.com debugging assistance
+  * Do not commit errors.log to git
+  * Keep errors.log accessible to Cursor
+  * Document error patterns in comments
+
+# Logging Guidelines
+- Use consistent error logging format
+- Keep errors.log for Cursor.com analysis
+- Use emoji prefixes for log sources:
+  * 🎵 Content script logs
+  * 🎬 Background script logs
+  * 🔧 Extension setup logs
+- Include timestamp and context with errors
+- Log both to console and errors.log
+- Don't log sensitive information
+
+# Testing Considerations
+- Test across different YouTube layouts
+- Verify playlist extraction reliability
+- Ensure proper error handling
+- Test permission flows
+- Verify download functionality
+- Check message passing reliability
+
+# Security Guidelines
+- Validate all URLs before processing
+- Sanitize data before storage
+- Handle permissions carefully
+- Follow CSP best practices
+- Implement proper error handling
+- Use secure communication patterns
 

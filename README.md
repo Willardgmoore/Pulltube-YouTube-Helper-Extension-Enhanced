@@ -130,6 +130,11 @@ The codebase follows SOLID principles:
 - Use the extension popup for recent URL history
 - Monitor the Downloads API in chrome://downloads
 - Check chrome://extensions for any loading errors
+- Review errors.log file for Cursor.com debugging assistance
+  * File is git-ignored but available to Cursor
+  * Contains console errors and debug information
+  * Helps with remote debugging and issue reproduction
+  * Automatically maintained by the extension
 
 ## Known Issues
 
